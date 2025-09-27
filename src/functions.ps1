@@ -156,9 +156,12 @@ function Open-RecentFile {
 # Update lists
 function Update-EventList {
   $playButton.Enabled = ($recordButton.Enabled -and $script:actions.Count -gt 0)
-  $eventListView.Items.Clear()
+  # Get current scroll position
+  $currentScrollTop = if ($eventListView.TopItem) { $eventListView.TopItem.Index } else { 0 }
+  
+  $Index = 0
   foreach ($action in $script:actions) {
-    $item = New-Object System.Windows.Forms.ListViewItem(($eventListView.Items.Count + 1).ToString())
+    $item = New-Object System.Windows.Forms.ListViewItem(($Index + 1).ToString())
     if ($null -ne $action.Type) { $item.SubItems.Add($action.Type) | Out-Null }
     else { $item.SubItems.Add("") | Out-Null }
     if ($null -ne $action.X) { $item.SubItems.Add($action.X.ToString()) | Out-Null }
@@ -174,7 +177,24 @@ function Update-EventList {
     if ($null -ne $action.Comment) { $item.SubItems.Add($action.Comment) | Out-Null }
     else { $item.SubItems.Add("") | Out-Null }
 
-    $eventListView.Items.Add($item) | Out-Null
+    if ($Index -lt $eventListView.Items.Count) {
+      $eventListView.Items[$Index] = $item
+    } else {
+      $eventListView.Items.Add($item) | Out-Null
+    }
+    $Index = $Index + 1
+  }
+  # Remove excess items if actions were deleted
+  if ($script:actions.Count -eq 0) {
+    $eventListView.Items.Clear()
+  } else {
+    while ($eventListView.Items.Count -gt $script:actions.Count) {
+      $eventListView.Items.RemoveAt($eventListView.Items.Count - 1)
+    }
+  }
+  # Restore scroll position
+  if ($currentScrollTop -lt $eventListView.Items.Count) {
+    $eventListView.EnsureVisible($currentScrollTop)
   }
 
   Update-EventListColors
@@ -182,11 +202,13 @@ function Update-EventList {
 
 function Update-EventListColors {
   foreach ($Item in $eventListView.Items) {
-    if ($Item.Index -eq $script:selectedIndex) {
+    if ($script:isPlaying -and $script:playbackIndex -eq $item.Index) {
+      $Item.BackColor = [System.Drawing.Color]::Black
+      $Item.ForeColor = [System.Drawing.Color]::White
+    } elseif ($Item.Index -eq $script:selectedIndex) {
       $Item.BackColor = [System.Drawing.Color]::Blue
       $Item.ForeColor = [System.Drawing.Color]::White
-    }
-    else {
+    } else {
       $Item.BackColor = [System.Drawing.Color]::White
       $Item.ForeColor = [System.Drawing.Color]::Black
     }
@@ -411,10 +433,10 @@ function Start-Playback {
   $script:playbackTimer.Start()
     
   if ($script:playbackLoopCount -eq 0) {
-    $statusLabel.Text = "Status: Playing back recording... (infinite loops)"
+    $statusLabel.Text = "Status: Playing back ... (infinite loops)"
   }
   else {
-    $statusLabel.Text = "Status: Playing back recording... (loop 1/$script:playbackLoopCount)"
+    $statusLabel.Text = "Status: Playing back ... (loop 1/$script:playbackLoopCount)"
   }
 }
 
@@ -426,7 +448,7 @@ function Stop-Playback {
   if ($script:targetHwnd -and $script:pressedKeys.Count -gt 0) {
     foreach ($keyCode in $script:pressedKeys.Keys) {
       try {
-        [Win32]::PostMessage($script:targetHwnd, $global:WM_KEYUP, [IntPtr]$keyCode, [IntPtr]0) | Out-Null
+        Send-KeyUp $script:targetHwnd $keyCode
       }
       catch {
         # Ignore errors
@@ -442,18 +464,10 @@ function Stop-Playback {
     [Win32]::GetWindowRect($script:targetHwnd, [ref]$rect) | Out-Null
     $centerX = ($rect.Right - $rect.Left) / 2
     $centerY = ($rect.Bottom - $rect.Top) / 2
-    $lParam = [int]($centerY -shl 16) -bor [int]$centerX
         
     foreach ($button in $script:pressedMouseButtons.Keys) {
       try {
-        switch ($button) {
-          "Left" { 
-            [Win32]::PostMessage($script:targetHwnd, [Win32]::WM_LBUTTONUP, [IntPtr]0, [IntPtr]$lParam) | Out-Null
-          }
-          "Right" { 
-            [Win32]::PostMessage($script:targetHwnd, [Win32]::WM_RBUTTONUP, [IntPtr]0, [IntPtr]$lParam) | Out-Null
-          }
-        }
+        Send-MouseUp $script:targetHwnd $centerX $centerY $button
       }
       catch {
         # Ignore errors
@@ -583,9 +597,9 @@ $script:playbackTimer.Add_Tick({
         
         # Update status
         if ($script:playbackLoopCount -eq 0) {
-          $statusLabel.Text = "Status: Playing back recording... (loop $($script:playbackCurrentLoop + 1)/Infinity)"
+          $statusLabel.Text = "Status: Playing back ... (loop $($script:playbackCurrentLoop + 1)/Infinity)"
         } else {
-          $statusLabel.Text = "Status: Playing back recording... (loop $($script:playbackCurrentLoop + 1)/$script:playbackLoopCount)"
+          $statusLabel.Text = "Status: Playing back ... (loop $($script:playbackCurrentLoop + 1)/$script:playbackLoopCount)"
         }
         return
       }
@@ -598,11 +612,12 @@ $script:playbackTimer.Add_Tick({
     return
   }
   
+  Update-EventListColors
   $currentAction = $script:actions[$script:playbackIndex]
   $currentTime = [Environment]::TickCount
   
   # Check if it's time to execute this action
-  if ($script:playbackIndex -eq 0 -or ($currentTime - $script:prevTime) -ge $currentAction.Duration) {  
+  if (($currentTime - $script:prevTime) -ge $currentAction.Duration) {  
     $script:prevTime = $currentTime
     try {
       # Handle keyboard actions

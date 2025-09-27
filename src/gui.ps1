@@ -4,7 +4,7 @@ Add-Type -AssemblyName System.Drawing
 # Global GUI Form
 $Global:gui = New-Object System.Windows.Forms.Form
 $Global:gui.Text = "Autoclicker Tool"
-$Global:gui.Size = New-Object System.Drawing.Size(400, 400)
+$Global:gui.Size = New-Object System.Drawing.Size(400, 450)
 $Global:gui.StartPosition = "CenterScreen"
 $Global:gui.FormBorderStyle = 'Sizable'
 $Global:gui.MinimumSize = New-Object System.Drawing.Size(400, 400)
@@ -185,6 +185,11 @@ $recordButton.Add_Click({
     Stop-Recording
     $playButton.Enabled = $True
   } else {
+    # Focus the target window before recording
+    if ($script:targetHwnd -ne $null -and $script:targetHwnd -ne [System.IntPtr]::Zero) {
+      [Win32]::SetForegroundWindow($script:targetHwnd)
+      Start-Sleep -Milliseconds 100
+    }
     $recordButton.Text = "Stop Rec"
     Start-Recording
     $playButton.Enabled = $False
@@ -494,71 +499,8 @@ $buttonPanel.Location = New-Object System.Drawing.Point(160, 150)
 $buttonPanel.Size = New-Object System.Drawing.Size(200, 30)
 $actionPanel.Controls.Add($buttonPanel) | Out-Null
 
-$addButton = New-Object System.Windows.Forms.Button
-$addButton.Text = "+"
-$addButton.Location = New-Object System.Drawing.Point(0, 0)
-$addButton.Size = New-Object System.Drawing.Size(25, 25)
-$buttonPanel.Controls.Add($addButton) | Out-Null
-$addButton.Add_Click({
-  if ($mouseRadio.Checked) {
-    $x = $xBox.Value
-    $y = $yBox.Value
-  } else {
-    $x = $null
-    $y = $null
-  }
-  if ($mouseRadio.Checked) {
-    $action = "Mouse"
-  } elseif ($keyboardRadio.Checked) {
-    if ($keyTextBox.Text -eq "" -and $keyboardRadio.Checked) {
-      [System.Windows.Forms.MessageBox]::Show("Please enter a key or text for the keyboard action.", "Input Required", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) | Out-Null
-      return
-    }
-    $action = "Key"
-  } else {
-    $action = "Delay"
-  }
-  if ($action -ne "Delay") {
-    if ($pressRadio.Checked) {
-      if ($mouseRadio.Checked) {
-        $action += "Click"
-      } else {
-        $action += "Press"
-      }
-    } elseif ($downRadio.Checked) {
-      $action += "Down"
-    } elseif ($upRadio.Checked) {
-      $action += "Up"
-    }
-
-    if ($mouseRadio.Checked) {
-      if ($leftRadio.Checked) {
-        $actionValue += "Left"
-      } elseif ($middleRadio.Checked) {
-        $actionValue += "Middle"
-      } elseif ($rightRadio.Checked) {
-        $actionValue += "Right"
-      }
-    } else {
-      if ($keyboardRadio.Checked) {
-        $actionValue = $keyTextBox.Text
-      }
-    }
-  }
-  $duration = $durationBox.Value
-  $repeat = $repeatBox.Value
-  Add-Action $action $x $y $actionValue $duration $repeat ""
-})
-
-$updateButton = New-Object System.Windows.Forms.Button
-$updateButton.Text = "Update"
-$updateButton.Location = New-Object System.Drawing.Point(30, 0)
-$updateButton.Size = New-Object System.Drawing.Size(60, 25)
-$updateButton.Enabled = $false
-$buttonPanel.Controls.Add($updateButton) | Out-Null
-$updateButton.Add_Click({
-  if ($script:selectedIndex -ne $null) {
-    if ($mouseRadio.Checked) {
+function Get-ActionFromRadio {
+if ($mouseRadio.Checked) {
       $x = $xBox.Value
       $y = $yBox.Value
     } else {
@@ -568,15 +510,15 @@ $updateButton.Add_Click({
     if ($mouseRadio.Checked) {
       $action = "Mouse"
     } elseif ($keyboardRadio.Checked) {
-      if ($keyTextBox.Text -eq "" -and $keyboardRadio.Checked) {
-        [System.Windows.Forms.MessageBox]::Show("Please enter a key or text for the keyboard action.", "Input Required", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) | Out-Null
-        return
-      }
       $action = "Key"
     } else {
       $action = "Delay"
     }
     if ($action -ne "Delay") {
+      if (($pressRadio.Checked -or $downRadio.Checked -or $upRadio.Checked) -ne $True) {
+        [System.Windows.Forms.MessageBox]::Show("Please select the radio button for the action type.", "Input Required", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) | Out-Null
+        return
+      }
       if ($pressRadio.Checked) {
         if ($mouseRadio.Checked) {
           $action += "Click"
@@ -588,8 +530,12 @@ $updateButton.Add_Click({
       } elseif ($upRadio.Checked) {
         $action += "Up"
       }
-
+      
       if ($mouseRadio.Checked) {
+        if (($leftRadio.Checked -or $middleRadio.Checked -or $rightRadio.Checked) -ne $True) {
+          [System.Windows.Forms.MessageBox]::Show("Please select the radio button for the button type.", "Input Required", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) | Out-Null
+          return
+        }
         if ($leftRadio.Checked) {
           $actionValue += "Left"
         } elseif ($middleRadio.Checked) {
@@ -597,15 +543,53 @@ $updateButton.Add_Click({
         } elseif ($rightRadio.Checked) {
           $actionValue += "Right"
         }
-      } else {
-        if ($keyboardRadio.Checked) {
-          $actionValue = $keyTextBox.Text
+      } elseif ($keyboardRadio.Checked) {
+        if ($keyTextBox.Text -eq "" -and $keyboardRadio.Checked) {
+          [System.Windows.Forms.MessageBox]::Show("Please enter a key or text for the keyboard action.", "Input Required", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) | Out-Null
+          return
         }
+        $actionValue = $keyTextBox.Text
       }
     }
     $duration = $durationBox.Value
     $repeat = $repeatBox.Value
-    Update-Action $script:selectedIndex $action $x $y $actionValue $duration $repeat ""
+    return [PSCustomObject]@{
+      x           = $x
+      y           = $y
+      actionValue = $actionValue
+      action      = $action
+      duration    = $duration
+      repeat      = $repeat
+      comment     = ""
+    }
+}
+
+$addButton = New-Object System.Windows.Forms.Button
+$addButton.Text = "+"
+$addButton.Location = New-Object System.Drawing.Point(0, 0)
+$addButton.Size = New-Object System.Drawing.Size(25, 25)
+$buttonPanel.Controls.Add($addButton) | Out-Null
+$addButton.Add_Click({
+  $actionValue = Get-ActionFromRadio
+  $script:selectedIndex = $script:actions.Count
+  if ($actionValue -ne $null) {
+    Add-Action $actionValue.action $actionValue.x $actionValue.y $actionValue.actionValue $actionValue.duration $actionValue.repeat $actionValue.comment
+  }
+  Update-ButtonStates
+})
+
+$updateButton = New-Object System.Windows.Forms.Button
+$updateButton.Text = "Update"
+$updateButton.Location = New-Object System.Drawing.Point(30, 0)
+$updateButton.Size = New-Object System.Drawing.Size(60, 25)
+$updateButton.Enabled = $false
+$buttonPanel.Controls.Add($updateButton) | Out-Null
+$updateButton.Add_Click({
+  if ($script:selectedIndex -ne $null) {
+    $actionValue = Get-ActionFromRadio
+    if ($actionValue -ne $null) {
+      Update-Action $script:selectedIndex $actionValue.action $actionValue.x $actionValue.y $actionValue.actionValue $actionValue.duration $actionValue.repeat $actionValue.comment
+    }
   }
 })
 
@@ -617,10 +601,12 @@ $deleteButton.Enabled = $false
 $buttonPanel.Controls.Add($deleteButton) | Out-Null
 $deleteButton.Add_Click({
   if ($script:selectedIndex -ne $null) {
-    $selectedItem = $eventListView.SelectedItems[0]
-    $script:selectedIndex = $selectedItem.Index
-
-    Remove-Action $script:selectedIndex
+    $removeIndex = $script:selectedIndex
+    $script:selectedIndex = if ($script:selectedIndex -gt 0) { $script:selectedIndex - 1 } elseif ($script:selectedIndex -eq 0 -and $script:actions.Count -gt 0) { 0 } else { $null }
+    Set-FormFromEventListViewItem $script:actions[$script:selectedIndex]
+    Remove-Action $removeIndex
+    Update-ButtonStates
+    Update-EventListColors
   }
 })
 
@@ -633,7 +619,8 @@ $buttonPanel.Controls.Add($upButton) | Out-Null
 $upButton.Add_Click({
   if ($script:selectedIndex -ne $null) {
     Move-Action $script:selectedIndex -1
-    $selectedIndex -= 1
+    $script:selectedIndex = $script:selectedIndex - 1
+    Update-ButtonStates
     Update-EventListColors
   }
 })
@@ -647,7 +634,8 @@ $buttonPanel.Controls.Add($downButton) | Out-Null
 $downButton.Add_Click({
   if ($script:selectedIndex -ne $null) {
     Move-Action $script:selectedIndex 1
-    $selectedIndex += 1
+    $script:selectedIndex = $script:selectedIndex + 1
+    Update-ButtonStates
     Update-EventListColors
   }
 })
@@ -655,7 +643,7 @@ $downButton.Add_Click({
 ##### Event List #####
 $eventListView = New-Object System.Windows.Forms.ListView
 $eventListView.Location = New-Object System.Drawing.Point(0, 250)
-$eventListView.Size = New-Object System.Drawing.Size(385, 90)
+$eventListView.Size = New-Object System.Drawing.Size(385, 140)
 $eventListView.View = 'Details'
 $eventListView.FullRowSelect = $true
 $eventListView.GridLines = $true
@@ -675,31 +663,21 @@ $eventListView.Columns.Add("Repeat", 60) | Out-Null
 $eventListView.Columns.Add("Comment", 120) | Out-Null
 $Global:gui.Controls.Add($eventListView) | Out-Null
 
-$eventListView.Add_SelectedIndexChanged({
-  if ($eventListView.SelectedItems.Count -gt 0) {
-    $selectedItem = $eventListView.SelectedItems[0]
-    $script:selectedIndex = $selectedItem.Index
-  }
-
-  # Disable buttons when no item is selected
-  if ($script:selectedIndex -eq $null) {
+function Update-ButtonStates {
+  if ($null -eq $script:selectedIndex) {
     $updateButton.Enabled = $false
     $deleteButton.Enabled = $false
     $upButton.Enabled = $false
     $downButton.Enabled = $false
   } else {
-    # Enable update and delete buttons
     $updateButton.Enabled = $true
     $deleteButton.Enabled = $true
     $upButton.Enabled = ($script:selectedIndex -gt 0)
     $downButton.Enabled = ($script:selectedIndex -lt ($eventListView.Items.Count - 1))
   }
+}
 
-  Update-EventListColors
-  
-  # Populate the form fields with selected action data
-  $action = $script:actions[$script:selectedIndex]
-  
+function Set-FormFromEventListViewItem ($action) {
   # Set action type radio buttons
   $mouseRadio.Checked = $False
   $keyboardRadio.Checked = $False
@@ -745,6 +723,20 @@ $eventListView.Add_SelectedIndexChanged({
   
   $durationBox.Value = $action.Duration
   $repeatBox.Value = $action.Repeat
+}
+
+$eventListView.Add_SelectedIndexChanged({
+  if ($eventListView.SelectedItems.Count -gt 0) {
+    $selectedItem = $eventListView.SelectedItems[0]
+    $script:selectedIndex = $selectedItem.Index
+  }
+
+  Update-ButtonStates
+  Update-EventListColors
+  
+  # Populate the form fields with selected action data
+  $action = $script:actions[$script:selectedIndex]
+  Set-FormFromEventListViewItem $action
   
   $Global:statusLabel.Text = "Action selected: $($action.Action) at position $($script:selectedIndex + 1)"
 })
