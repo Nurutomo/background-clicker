@@ -509,77 +509,16 @@ $addButton.Add_Click({
   }
   if ($mouseRadio.Checked) {
     $action = "Mouse"
+  } elseif ($keyboardRadio.Checked) {
+    if ($keyTextBox.Text -eq "" -and $keyboardRadio.Checked) {
+      [System.Windows.Forms.MessageBox]::Show("Please enter a key or text for the keyboard action.", "Input Required", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) | Out-Null
+      return
+    }
+    $action = "Key"
   } else {
-    if ($keyboardRadio.Checked) {
-      if ($keyTextBox.Text -eq "" -and $keyboardRadio.Checked) {
-        [System.Windows.Forms.MessageBox]::Show("Please enter a key or text for the keyboard action.", "Input Required", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) | Out-Null
-        return
-      }
-      $action = "Key"
-    } else {
-      $action = "Delay"
-    }
+    $action = "Delay"
   }
-  if ($pressRadio.Checked) {
-    if ($mouseRadio.Checked) {
-      $action += "Click"
-    } else {
-      $action += "Press"
-    }
-  } elseif ($downRadio.Checked) {
-    $action += "Down"
-  } elseif ($upRadio.Checked) {
-    $action += "Up"
-  }
-
-  $actionValue = ""
-  if ($mouseRadio.Checked) {
-    if ($leftRadio.Checked) {
-      $actionValue = "Left"
-    } elseif ($middleRadio.Checked) {
-      $actionValue = "Middle"
-    } elseif ($rightRadio.Checked) {
-      $actionValue = "Right"
-    }
-  } else {
-    if ($keyboardRadio.Checked) {
-      $actionValue = $keyTextBox.Text
-    }
-  }
-  $duration = $durationBox.Value
-  $repeat = $repeatBox.Value
-  Add-Action $action $x $y $actionValue $duration $repeat ""
-})
-
-$updateButton = New-Object System.Windows.Forms.Button
-$updateButton.Text = "Update"
-$updateButton.Location = New-Object System.Drawing.Point(30, 0)
-$updateButton.Size = New-Object System.Drawing.Size(60, 25)
-$updateButton.Enabled = $false
-$buttonPanel.Controls.Add($updateButton) | Out-Null
-$updateButton.Add_Click({
-  if ($script:selectedIndex -ne $null) {
-
-    if ($mouseRadio.Checked) {
-      $x = $xBox.Value
-      $y = $yBox.Value
-    } else {
-      $x = $null
-      $y = $null
-    }
-    if ($mouseRadio.Checked) {
-      $action = "Mouse"
-    } else {
-      if ($keyboardRadio.Checked) {
-        if ($keyTextBox.Text -eq "" -and $keyboardRadio.Checked) {
-          [System.Windows.Forms.MessageBox]::Show("Please enter a key or text for the keyboard action.", "Input Required", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) | Out-Null
-          return
-        }
-        $action = "Key"
-      } else {
-        $action = "Delay"
-      }
-    }
+  if ($action -ne "Delay") {
     if ($pressRadio.Checked) {
       if ($mouseRadio.Checked) {
         $action += "Click"
@@ -603,6 +542,65 @@ $updateButton.Add_Click({
     } else {
       if ($keyboardRadio.Checked) {
         $actionValue = $keyTextBox.Text
+      }
+    }
+  }
+  $duration = $durationBox.Value
+  $repeat = $repeatBox.Value
+  Add-Action $action $x $y $actionValue $duration $repeat ""
+})
+
+$updateButton = New-Object System.Windows.Forms.Button
+$updateButton.Text = "Update"
+$updateButton.Location = New-Object System.Drawing.Point(30, 0)
+$updateButton.Size = New-Object System.Drawing.Size(60, 25)
+$updateButton.Enabled = $false
+$buttonPanel.Controls.Add($updateButton) | Out-Null
+$updateButton.Add_Click({
+  if ($script:selectedIndex -ne $null) {
+    if ($mouseRadio.Checked) {
+      $x = $xBox.Value
+      $y = $yBox.Value
+    } else {
+      $x = $null
+      $y = $null
+    }
+    if ($mouseRadio.Checked) {
+      $action = "Mouse"
+    } elseif ($keyboardRadio.Checked) {
+      if ($keyTextBox.Text -eq "" -and $keyboardRadio.Checked) {
+        [System.Windows.Forms.MessageBox]::Show("Please enter a key or text for the keyboard action.", "Input Required", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning) | Out-Null
+        return
+      }
+      $action = "Key"
+    } else {
+      $action = "Delay"
+    }
+    if ($action -ne "Delay") {
+      if ($pressRadio.Checked) {
+        if ($mouseRadio.Checked) {
+          $action += "Click"
+        } else {
+          $action += "Press"
+        }
+      } elseif ($downRadio.Checked) {
+        $action += "Down"
+      } elseif ($upRadio.Checked) {
+        $action += "Up"
+      }
+
+      if ($mouseRadio.Checked) {
+        if ($leftRadio.Checked) {
+          $actionValue += "Left"
+        } elseif ($middleRadio.Checked) {
+          $actionValue += "Middle"
+        } elseif ($rightRadio.Checked) {
+          $actionValue += "Right"
+        }
+      } else {
+        if ($keyboardRadio.Checked) {
+          $actionValue = $keyTextBox.Text
+        }
       }
     }
     $duration = $durationBox.Value

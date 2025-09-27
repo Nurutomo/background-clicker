@@ -476,6 +476,9 @@ function Add-Action {
   )
     
   $action = [PSCustomObject]@{
+    X        = $null
+    Y        = $null
+    Value    = $null
     Type     = $Type
     Duration = $Duration
     Repeat   = $Repeat
@@ -484,7 +487,6 @@ function Add-Action {
   if ($X -ne $null) { $action.X = $X }
   if ($Y -ne $null) { $action.Y = $Y }
   if ($Value -ne $null) { $action.Value = $Value }
-  if ($Duration -ne $null) { $action.Duration = $Duration }
 
   $script:actions += $action
   Update-EventList
@@ -503,6 +505,9 @@ function Update-Action {
   )
     
   $action = [PSCustomObject]@{
+    X        = $null
+    Y        = $null
+    Value    = $null
     Type     = $Type
     Duration = $Duration
     Repeat   = $Repeat
@@ -511,7 +516,6 @@ function Update-Action {
   if ($X -ne $null) { $action.X = $X }
   if ($Y -ne $null) { $action.Y = $Y }
   if ($Value -ne $null) { $action.Value = $Value }
-  if ($Duration -ne $null) { $action.Duration = $Duration }
 
   $script:actions[$Index] = $action
   Update-EventList
